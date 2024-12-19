@@ -1,189 +1,222 @@
-#include"Translator.h"
+#include "translator.h"
 
+void Translator::translate() {
+	stack.push(Token("?", Token::TokenType::Sep));
+	Token currentToken = lexer.getNextToken();
 
-void Translator::breakReading(std::string message, int num = 0) {
-	filepath.close();
-	if (num == 0) {
-		std::cout << "Was encountered '" << currentChar << message;
-	}
-	if (num == 1) {
-		std::cout << "no such operand " << message;
-	}
-	throw "\nAbort Parsing.";
-}
+	while (true) {
+		if (stack.top().getTokenType() == Token::TokenType::Sep && currentToken.getTokenType() == Token::TokenType::Sep)
+			break;
+		while (shiftReduce(currentToken))
+			continue;
+		currentToken = lexer.getNextToken();
 
-
-
-bool Translator::isAlph() {
-	return (currentChar >= 'a' && currentChar <= 'z') || currentChar == '_';
-}
-
-bool Translator::isDigit() {
-	return currentChar >= '0' && currentChar <= '9';
-}
-
-bool Translator::isSpace() {
-	return currentChar == ' ' || currentChar == '\t' || currentChar == '\n' || currentChar == '\r';
-}
-
-void Translator::nextChar() {
-	if (currentChar != EOF) {
-		currentChar = filepath.get();
-		while (isSpace()) {
-			currentChar = filepath.get();
-		}
-	}
-}
-
-void Translator::startParse() {
-
-	nextChar();
-	while (currentChar != EOF) {
-		procS();
-	}
-
-}
-
-void Translator::add(const std::pair<std::string, long int>& value) {
-	for (int i = 0; varTable.size() > i;i++) {
-		if (varTable[i].first == value.first) {
-			varTable[i].second = value.second;
-			return;
-		}
-	}
-	varTable.push_back(value);
-}
-
-long int Translator::procS(bool in, std::string name) {
-
-	if (!in) {
-
-		if (!isAlph()) {
-			breakReading(" Expected identifire");
-		}
-		std::string buff = "";
-		while (isAlph()) {
-			buff += currentChar;
-			nextChar();
-		}
-
-		if (currentChar == '(') {
-
-			std::pair<std::string, int> operand = std::make_pair(buff, procE());
-			if (currentChar == ')') {
-				nextChar();
-				add(operand);
+		if (stack.top().getTokenType() == Token::TokenType::I && currentToken.getValue() != "[") {
+			bool found = false;
+			for (auto var : initializedVar) {
+				if (stack.top().getValue() == var) {
+					found = true;
+					break;
+				}
 			}
-			else
-				breakReading(" Expected ')'");
-			return operand.second;
 		}
-		else
-			breakReading(" Expected '('");
+		std::cout << "OK." << std::endl;
+		writeTriads();
+	}
+}
 
+void Translator::initMatrices(){
+	eqMatrix = {
+		{'L','?'},{'L','S'},
+		{'I','['},{'[','E'},{'E',']'},
+		{'-','('},{'+','('},{'*','('},{'(','T'},{'T',')'},
+		{'T',','},{',','E'},
+	};
+	lessMatrix = {
+		{'?','S'},{'?','I'}, {'L','I'},
+		{'[','-'},{'[','+'},{'[','*'},{'[','S'},{'[','C'},{'[','I'},
+		{'(','E'},{'(','-'},{'(','+'},{'(','*'},{'(','S'},{'(','I'},{'(','C'},
+		{',','-'},{',','+'},{',','*'},{',','S'},{',','I'},{',','C'},
+	};
+	moreMatrix = {
+		{'S','?'},{')','?'},{'S','S'},{'S','I'},{')','S'},{')','I'},
+		{']',']'},{')',']'},{'S',']'},{'I',']'},{'C',']'},
+		{'E',','},{')',','},{'S',','},{'I',','},{'C',','},
+	};
+	lessEqMatrix = {
+		{'?','L'},
+	};
+}
+
+void Translator::initGrammar(){
+	grammar = {
+	{'L', {"LS", "S"}},
+	{'S', {"I[E]"}},
+	{'E', {"+(T)", "-(T)", "*(T)", "S", "I", "C"}},
+	{'T', {"T,E", "E"}},
+	};
+}
+
+bool Translator::shiftReduce(Token token){
+	if (haveRelationInMatrix(stack.top(), token, lessEqMatrix)) {
+		token.setPrecedence(Token::PrecendingType::LessEqual);
+		stack.push(token);
+		logStackState("shift(less or Equal)");
+	}
+	else if (haveRelationInMatrix(stack.top(), token, eqMatrix)) {
+		token.setPrecedence(Token::PrecendingType::Equal);
+		stack.push(token);
+		logStackState("shift(Equal)");
+	}
+	else if (haveRelationInMatrix(stack.top(), token, lessMatrix)) {
+		token.setPrecedence(Token::PrecendingType::Less);
+		stack.push(token);
+		logStackState("shift(less)");
+	}
+	else if (haveRelationInMatrix(stack.top(), token, moreMatrix)) {
+		token.setPrecedence(Token::PrecendingType::More);
+		stack.push(token);
+		logStackState("shift(More)");
 	}
 	else {
-
-		std::pair<std::string, int> operand = std::make_pair(name, procE());
-		if (currentChar == ')') {
-			nextChar();
-
-			add(operand);
-		}
-		else
-			breakReading(" Expected ')'");
-		return operand.second;
+		error("invalid syntax - no such sequence of characters");
 	}
-
+	return false;
 }
 
-long int Translator::procE() {
-	nextChar();
-	std::string buff;
-	if (currentChar == '-') {
-		return;
+void Translator::reduceStack(){
+	std::deque<Token> rulesDeq = stack._Get_container();
+	bool reduced = false;
+	char rule = NULL;
+	std::string stringRule = "";
+	while (!rulesDeq.empty()) {
+		while (!rulesDeq.empty() && rulesDeq.front().getPrecendingType() != Token::PrecendingType::Less && rulesDeq.front().getPrecendingType() != Token::PrecendingType::LessEqual) {
+			rulesDeq.pop_front();
+		}
+		stringRule = getDequeStr(rulesDeq);
+		rule = findRule(stringRule);
+		if (rule != NULL) {
+			reduced = true;
+			break;
+		}
+
+		rulesDeq.pop_front();
 	}
-	else if (currentChar == '*' || currentChar == '+')
-		return procT();
-	else if (currentChar == '#')
-		return procR();
-	else if (isAlph())
-		return procX();
+	if (!reduced)
+		error("invalid syntax - no such rule");
+	for (int i = 0; i < rulesDeq.size();i++) {
+		if (rule == 'S' && stack.top().getTokenType() == Token::TokenType::I)
+			initializedVar.push_back(stack.top().getValue());
+		stack.pop();
+	}
+	Token reducedToken = Token("", static_cast<Token::TokenType>(rule));
+	formTriads(reducedToken, rulesDeq, stringRule);
+	if (haveRelationInMatrix(stack.top(), reducedToken, lessEqMatrix))
+		reducedToken.setPrecedence(Token::PrecendingType::LessEqual);
+	else if (haveRelationInMatrix(stack.top(), reducedToken, eqMatrix))
+		reducedToken.setPrecedence(Token::PrecendingType::Equal);
+	else if (haveRelationInMatrix(stack.top(), reducedToken, lessMatrix))
+		reducedToken.setPrecedence(Token::PrecendingType::Less);
 	else
-		breakReading(" Expected operation or digit/operator");
+		error("invalid syntax - no such sequence of characters to reduce");
+
+	stack.push(reducedToken);
+
 }
 
-long int Translator::procX() {
-	std::string buff;
-	while (isAlph()) {
-		buff += currentChar;
-		nextChar();
+void Translator::formTriads(Token& reducedToken, std::deque<Token> tokensSequence, std::string rule){
+	if (rule == "C") {
+		triads.push_back({ 'C', tokensSequence[0].getValue(), "@" });
+		reducedToken.setTriadnum(triads.size());
 	}
-	if (currentChar == '(') {
-		return procS(true, buff);
+	else if (rule == "I") {
+		triads.push_back({'V', tokensSequence[0].getValue(), "@"});
+		reducedToken.setTriadnum(triads.size());
 	}
-	else {
-		return procI(buff);
+	else if (rule == "+(T)") {
+		triads.push_back({ '+', "^" + std::to_string(tokensSequence[0].getTriadNum()), "^" + std::to_string(tokensSequence[2].getTriadNum()) });
+		reducedToken.setTriadnum(triads.size());
+	}
+	else if (rule == "-(T)") {
+		triads.push_back({ '-', "^" + std::to_string(tokensSequence[0].getTriadNum()), "^" + std::to_string(tokensSequence[2].getTriadNum()) });
+		reducedToken.setTriadnum(triads.size());
+	}
+	else if (rule == "*(T)") {
+		triads.push_back({ '+', "^" + std::to_string(tokensSequence[0].getTriadNum()), "^" + std::to_string(tokensSequence[2].getTriadNum()) });
+		reducedToken.setTriadnum(triads.size());
+	}
+
+	else if (rule == "I[E]") {
+		triads.push_back({ 'V', tokensSequence[0].getValue(), "@" });
+		triads.push_back({ '=', "^" + std::to_string(triads.size()), "^" + std::to_string(tokensSequence[2].getTriadNum()) });
+	}
+	else if (rule == "T") {
+		reducedToken.setTriadnum(tokensSequence[0].getTriadNum());
+	}
+	else if (rule == "T,E") {
+		reducedToken.setTriadnum(tokensSequence[0].getTriadNum());
+	}
+	else if (rule == "S") {
+		triads.push_back({ '+', "^" + std::to_string(tokensSequence[0].getTriadNum()), "^" + std::to_string(tokensSequence[2].getTriadNum()) });
+		reducedToken.setTriadnum(triads.size());
 	}
 }
 
-long int Translator::procI(std::string name) {
-	for (int i = 0; i < varTable.size();i++) {
-		if (varTable[i].first == name) {
-			return varTable[i].second;
+bool Translator::haveRelationInMatrix(Token left, Token right, std::vector<std::pair<char, char>> matrix){
+	for (auto key : matrix) {
+		if (key.first == left.getChar() && key.second == right.getChar()) {
+			return true;
 		}
 	}
-	breakReading(name, 1);
+	return false;
 }
 
-long int Translator::procT() {
-	long int result;
-	if (currentChar == '*') {
-		result = 1;
-		nextChar();
-		if (currentChar == '(') {
-			result *= procE();
-			while (currentChar == ',') {
-				result *= procE();
-			}
-			if (currentChar == ')') {
-				nextChar();
-				return result;
-			}
-			else
-				breakReading(" Expected ')'");
+char Translator::findRule(std::string _rule){
+	for (auto& rules : grammar) {
+		for (auto& rule : _rule) {
+			return rules.first;
 		}
-		else
-			breakReading(" Expected '('");
 	}
-	else if (currentChar == '+') {
-		result = 0;
-		nextChar();
-		if (currentChar == '(') {
-			result += procE();
-			while (currentChar == ',') {
-				result += procE();
-			}
-			if (currentChar == ')') {
-				nextChar();
-				return result;
-			}
-			else
-				breakReading(" Expected ')'");
-		}
-		else
-			breakReading(" Expected '('");
-	}
-
+	return NULL;
 }
 
-long int Translator::procR() {
-	nextChar();
-	std::string buff;
-	while (isDigit()) {
-		buff += currentChar;
-		nextChar();
-
+std::string Translator::getStackStr(){
+	std::stack<Token> tmp = stack;
+	std::vector<char> stackChars;
+	while (!tmp.empty()) {
+		stackChars.push_back(tmp.top().getChar());
+		stackChars.push_back(tmp.top().getPrecendingType());
+		tmp.pop();
 	}
-	return stol(buff);
+	std::reverse(stackChars.begin(), stackChars.end());
+	return std::string(stackChars.begin(), stackChars.end());
+}
+
+std::string Translator::getDequeStr(std::deque<Token> deque){
+	std::string result = "";
+	while (!deque.empty()) {
+		result += deque.front().getChar();
+		deque.pop_front();
+	}
+	return result;
+}
+
+void Translator::logStackState(std::string message){
+	std::cout << "Action:\t" << message << std::endl;
+	std::cout << "Stack:\t\b" << getStackStr() << std::endl;
+
+	std::cout << std::endl;
+}
+
+void Translator::writeTriads(){
+	int i = 1;
+	for (auto x : triads) {
+		std::cout << i << ". " << std::get<0>(x) << "(" << std::get<1>(x) << ", " << std::get<2>(x) << ")\n";
+		i++;
+	}
+}
+
+void Translator::error(std::string message){
+	std::cout << "\nInterpreter error: " << message << std::endl;
+	throw std::exception();
 }

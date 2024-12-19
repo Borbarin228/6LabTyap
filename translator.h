@@ -4,31 +4,49 @@
 #include <vector>
 #include<fstream>
 #include<iostream>
+#include "lexer.h"
+#include <stack>
+#include <map>
 
 class Translator {
 private:
-	std::ifstream filepath;
-	char currentChar;
-	std::vector<std::pair<std::string, long int>> varTable;
+	std::ofstream outFile;
+	Lexer& lexer;
+
+	std::stack<Token> stack;
+	std::vector<std::string> initializedVar;
+	std::vector<std::tuple<char, std::string, std::string>> triads;
+
+	std::vector<std::pair<char, char>> eqMatrix;
+	std::vector<std::pair<char, char>> lessMatrix;
+	std::vector<std::pair<char, char>> lessEqMatrix;
+	std::vector<std::pair<char, char>> moreMatrix;
+
+	std::map<char, std::vector<std::string>> grammar;
 public:
-	Translator() : currentChar('\0') { filepath.open("C:\\Users\\Boris\\Desktop\\tyap\\prog.txt"); };
-	~Translator() { filepath.close(); };
+	Translator(Lexer& lexer) : lexer(lexer) {
+		outFile = std::ofstream("C:\\Users\\Boris\\Desktop\\tyap\\out.txt");
+		initMatrices();
+		initGrammar();
+	};
+	
+	~Translator() { outFile.close(); };
 
-	void startParse();
+	void translate();
+
 private:
-	void nextChar();
-	bool isSpace();
-	bool isAlph();
-	bool isDigit();
-	long int procS(bool = false, std::string = "");
-	long int procE();
-	long int procR();
-	void breakReading(std::string, int);
-	void add(const std::pair<std::string, long int>&);
-	long int procT();
-	long int procI(std::string);
-	long int procX();
-
+	void initMatrices();
+	void initGrammar();
+	bool shiftReduce(Token);
+	void reduceStack();
+	void formTriads(Token&, std::deque<Token>, std::string);
+	bool haveRelationInMatrix(Token, Token, std::vector<std::pair<char, char>>);
+	char findRule(std::string);
+	std::string getStackStr();
+	std::string getDequeStr(std::deque<Token>);
+	void logStackState(std::string);
+	void writeTriads();
+	void error(std::string);
 };
 
 
