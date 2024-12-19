@@ -1,12 +1,5 @@
 #include"Translator.h"
 
-Triad::Triad(Operation op, Operand opL, Operand opR, std::string opLV, std::string opRV = "") {
-	operation = op;
-	leftOp = opL;
-	rightOp = opR;
-	leftOpValue = opLV;
-	rightOpValue = opRV;
-}
 
 void Translator::breakReading(std::string message, int num = 0) {
 	filepath.close();
@@ -48,7 +41,7 @@ void Translator::startParse() {
 	while (currentChar != EOF) {
 		procS();
 	}
-	parseTriads();
+
 }
 
 void Translator::add(const std::pair<std::string, long int>& value) {
@@ -73,41 +66,33 @@ long int Translator::procS(bool in, std::string name) {
 			buff += currentChar;
 			nextChar();
 		}
-		std::cout << ++_numberOfTriads << ":\t" << "V(" << buff << ", @)\n";
-		triads.push_back(new Triad(Triad::Var, Triad::Varible, Triad::Void, buff));
-		int leftOp = _numberOfTriads;
+
 		if (currentChar == '(') {
-			int rightOp = procE();
-			std::pair<std::string, int> operand = std::make_pair(buff, rightOp);
+
+			std::pair<std::string, int> operand = std::make_pair(buff, procE());
 			if (currentChar == ')') {
 				nextChar();
 				add(operand);
 			}
 			else
 				breakReading(" Expected ')'");
-			std::cout << ++_numberOfTriads << ":\t" << "=(^" << leftOp << ", ^" << operand.second << ")\n";
-			triads.push_back(new Triad(Triad::Equal, Triad::Link, Triad::Link, std::to_string(leftOp), std::to_string(operand.second)));
-			return _numberOfTriads;
+			return operand.second;
 		}
 		else
 			breakReading(" Expected '('");
 
 	}
 	else {
-		std::cout << ++_numberOfTriads << ":\t" << "V(" << name << ", @)\n";
-		triads.push_back(new Triad(Triad::Var, Triad::Varible, Triad::Void, name));
-		int leftOp = _numberOfTriads;
+
 		std::pair<std::string, int> operand = std::make_pair(name, procE());
 		if (currentChar == ')') {
-
 			nextChar();
-			std::cout << ++_numberOfTriads << ":\t" << "=(^" << leftOp << ", ^" << operand.second << ")\n";
-			triads.push_back(new Triad(Triad::Equal, Triad::Link, Triad::Void, std::to_string(leftOp), std::to_string(operand.second)));
+
 			add(operand);
 		}
 		else
 			breakReading(" Expected ')'");
-		return _numberOfTriads;
+		return operand.second;
 	}
 
 }
@@ -116,10 +101,7 @@ long int Translator::procE() {
 	nextChar();
 	std::string buff;
 	if (currentChar == '-') {
-		int triad = procE();
-		std::cout << ++_numberOfTriads << ":\t" << "-(^" << triad << ", @)\n";
-		triads.push_back(new Triad(Triad::Minus, Triad::Link, Triad::Void, std::to_string(triad)));
-		return _numberOfTriads;
+		return;
 	}
 	else if (currentChar == '*' || currentChar == '+')
 		return procT();
@@ -148,28 +130,25 @@ long int Translator::procX() {
 long int Translator::procI(std::string name) {
 	for (int i = 0; i < varTable.size();i++) {
 		if (varTable[i].first == name) {
-			std::cout << ++_numberOfTriads << ":\t" << "V(" << name << ", @" << ")\n";
-			triads.push_back(new Triad(Triad::Var, Triad::Varible, Triad::Void, name));
-			return _numberOfTriads;
+			return varTable[i].second;
 		}
 	}
 	breakReading(name, 1);
 }
 
 long int Translator::procT() {
-	int leftOp, rightOp;
+	long int result;
 	if (currentChar == '*') {
+		result = 1;
 		nextChar();
 		if (currentChar == '(') {
-			leftOp = procE();
+			result *= procE();
 			while (currentChar == ',') {
-				rightOp = procE();
-				std::cout << ++_numberOfTriads << ":\t" << "*(^" << leftOp << ", ^" << rightOp << ")\n";
-				triads.push_back(new Triad(Triad::Multipl, Triad::Link, Triad::Link, std::to_string(leftOp), std::to_string(rightOp)));
-				leftOp = _numberOfTriads;
+				result *= procE();
 			}
 			if (currentChar == ')') {
 				nextChar();
+				return result;
 			}
 			else
 				breakReading(" Expected ')'");
@@ -178,18 +157,16 @@ long int Translator::procT() {
 			breakReading(" Expected '('");
 	}
 	else if (currentChar == '+') {
+		result = 0;
 		nextChar();
 		if (currentChar == '(') {
-			leftOp = procE();
+			result += procE();
 			while (currentChar == ',') {
-				rightOp = procE();
-				std::cout << ++_numberOfTriads << ":\t" << "+(^" << leftOp << ", ^" << rightOp << ")\n";
-				triads.push_back(new Triad(Triad::Plus, Triad::Link, Triad::Link, std::to_string(leftOp), std::to_string(rightOp)));
-				leftOp = _numberOfTriads;
+				result += procE();
 			}
 			if (currentChar == ')') {
-
 				nextChar();
+				return result;
 			}
 			else
 				breakReading(" Expected ')'");
@@ -197,7 +174,7 @@ long int Translator::procT() {
 		else
 			breakReading(" Expected '('");
 	}
-	return leftOp;
+
 }
 
 long int Translator::procR() {
@@ -208,138 +185,5 @@ long int Translator::procR() {
 		nextChar();
 
 	}
-	std::cout << ++_numberOfTriads << ":\t" << "C(" << buff << ", @)\n";
-	triads.push_back(new Triad(Triad::Const, Triad::Constant, Triad::Void, buff));
-	return _numberOfTriads;
-}
-
-void Translator::parseTriads() {
-	std::cout << "\n|||||||||||||PARSE TRIADS||||||||||||\n\n";
-	for (int i = 0;i < triads.size();i++) {
-		firstRule(triads[i]);
-		secondRule(triads[i]);
-		thirdRule(triads[i]);
-		fourthRule(triads[i]);
-	}
-	for (int i = 0; i < triads.size();i++) {
-		std::cout << i + 1 << ":\t";
-		writeTriad(i);
-	}
-
-}
-
-void Translator::writeTriad(int i) {
-	std::string result = "";
-	switch (triads[i]->operation)
-	{
-	case Triad::Var:
-		result = "V(";
-		break;
-	case Triad::Const:
-		result = "C(";
-		break;
-	case Triad::Minus:
-		result = "-(";
-		break;
-	case Triad::Multipl:
-		result = "*(";
-		break;
-	case Triad::Plus:
-		result = "+(";
-		break;
-	case Triad::Equal:
-		result = "=(";
-		break;
-	case Triad::None:
-		std::cout << "DELETE" << std::endl;
-		return;
-	}
-	if (triads[i]->leftOp == Triad::Constant) result += triads[i]->leftOpValue;
-	else if (triads[i]->leftOp == Triad::Varible) result += triads[i]->leftOpValue;
-	else if (triads[i]->leftOp == Triad::Link) result += "^" + triads[i]->leftOpValue;
-	else if (triads[i]->leftOp == Triad::Void) result += "@";
-
-	result += ", ";
-
-	if (triads[i]->rightOp == Triad::Constant) result += triads[i]->rightOpValue;
-	else if (triads[i]->rightOp == Triad::Varible) result += triads[i]->rightOpValue;
-	else if (triads[i]->rightOp == Triad::Link) result += "^" + triads[i]->rightOpValue;
-	else if (triads[i]->rightOp == Triad::Void) result += "@";
-
-	std::cout << result << ")" << std::endl;
-}
-
-void Translator::firstRule(Triad* currentTriad) {
-	if (currentTriad->operation == Triad::Minus) {
-		if (currentTriad->leftOp == Triad::Link) {
-			auto leftTriad = triads[std::stoi(currentTriad->leftOpValue) - 1];
-			if (leftTriad->operation == Triad::Const) {
-				currentTriad->leftOpValue = leftTriad->leftOpValue;
-				currentTriad->leftOp = Triad::Constant;
-				leftTriad->leftOp = Triad::Void;
-				leftTriad->operation = Triad::None;
-			}
-		}
-	}
-	else if (currentTriad->operation != Triad::Equal && currentTriad->rightOp != Triad::Void) {
-		if (currentTriad->leftOp == Triad::Link) {
-			auto leftTriad = triads[std::stoi(currentTriad->leftOpValue) - 1];
-			if (leftTriad->operation == Triad::Const) {
-				currentTriad->leftOpValue = leftTriad->leftOpValue;
-				currentTriad->leftOp = Triad::Constant;
-				leftTriad->leftOp = Triad::Void;
-				leftTriad->operation = Triad::None;
-			}
-		}
-
-	}
-
-
-}
-
-void Translator::secondRule(Triad* currentTriad) {
-	if (currentTriad->operation == Triad::Minus && currentTriad->leftOp == Triad::Constant) {
-		currentTriad->operation = Triad::Const;
-		currentTriad->leftOpValue = std::to_string(-1 * std::stoi(currentTriad->leftOpValue));
-	}
-}
-
-void Translator::thirdRule(Triad* currentTriad) {
-	if (currentTriad->operation != Triad::Equal) {
-		if (currentTriad->rightOp == Triad::Link) {
-			auto rightTriad = triads[std::stoi(currentTriad->rightOpValue) - 1];
-			if (rightTriad->operation == Triad::Const) {
-				currentTriad->rightOpValue = rightTriad->leftOpValue;
-				currentTriad->rightOp = Triad::Constant;
-				rightTriad->leftOp = Triad::Void;
-				rightTriad->operation = Triad::None;
-			}
-		}
-		if (currentTriad->leftOp == Triad::Constant && currentTriad->rightOp == Triad::Constant) {
-			if (currentTriad->operation == Triad::Multipl) {
-				currentTriad->operation = Triad::Const;
-				currentTriad->leftOpValue = std::to_string(std::stoi(currentTriad->leftOpValue) * std::stoi(currentTriad->rightOpValue));
-				currentTriad->rightOp = Triad::Void;
-			}
-			else if (currentTriad->operation == Triad::Plus) {
-				currentTriad->operation = Triad::Const;
-				currentTriad->leftOpValue = std::to_string(std::stoi(currentTriad->leftOpValue) + std::stoi(currentTriad->rightOpValue));
-				currentTriad->rightOp = Triad::Void;
-			}
-		}
-	}
-}
-
-void Translator::fourthRule(Triad* currentTriad) {
-	if (currentTriad->operation == Triad::Equal) {
-		if (currentTriad->leftOp == Triad::Link) {
-			auto leftTriad = triads[std::stoi(currentTriad->leftOpValue) - 1];
-			if (leftTriad->leftOp == Triad::Varible) {
-				currentTriad->leftOp = Triad::Varible;
-				currentTriad->leftOpValue = leftTriad->leftOpValue;
-				leftTriad->leftOp = Triad::Void;
-				leftTriad->operation = Triad::None;
-			}
-		}
-	}
+	return stol(buff);
 }
