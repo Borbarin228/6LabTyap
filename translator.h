@@ -6,7 +6,18 @@
 #include<iostream>
 #include "lexer.h"
 #include <stack>
-#include <map>
+
+
+class Triad {
+public:
+	enum Operation { Var, Const, Equal, Minus, Plus, Multipl, None };
+	enum Operand { Varible, Constant, Void, Link };
+	Operand leftOp, rightOp;
+	Operation operation;
+	std::string leftOpValue, rightOpValue;
+	Triad(Operation, Operand, Operand, std::string, std::string);
+
+};
 
 class Translator {
 private:
@@ -15,14 +26,13 @@ private:
 
 	std::stack<Token> stack;
 	std::vector<std::string> initializedVar;
-	std::vector<std::tuple<char, std::string, std::string>> triads;
+	std::vector<Triad*> triads;
 
 	std::vector<std::pair<char, char>> eqMatrix;
 	std::vector<std::pair<char, char>> lessMatrix;
 	std::vector<std::pair<char, char>> lessEqMatrix;
 	std::vector<std::pair<char, char>> moreMatrix;
-
-	std::map<char, std::vector<std::string>> grammar;
+	std::vector<std::pair<char, std::vector<std::string>>> grammar;
 public:
 	Translator(Lexer& lexer) : lexer(lexer) {
 		outFile = std::ofstream("C:\\Users\\Boris\\Desktop\\tyap\\out.txt");
@@ -45,8 +55,9 @@ private:
 	std::string getStackStr();
 	std::string getDequeStr(std::deque<Token>);
 	void logStackState(std::string);
-	void writeTriads();
+	void writeAllTriads();
 	void error(std::string);
+	void writeTriad(int);
 };
 
 

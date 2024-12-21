@@ -40,9 +40,6 @@ std::string Lexer::procI() {
 
 std::string Lexer::procC() {
 	std::string value = "";
-	if (currentChar != '#') {
-		error("expected #");
-	}
 	while (isdigit(currentChar)) {
 		value += currentChar;
 		getNextChar();
@@ -56,7 +53,8 @@ Token Lexer::getNextToken() {
 		std::string id = procI();
 		return Token(id, Token::TokenType::I);
 	}
-	else if (isdigit(currentChar)) {
+	else if (currentChar == '#') {
+		getNextChar();
 		std::string value = procC();
 		return Token(value, Token::TokenType::C);
 	}
